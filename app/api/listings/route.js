@@ -1,13 +1,17 @@
 import { MongoClient } from "mongodb";
 
-const client = new MongoClient(process.env.MONGODB_URI);
-
 export async function GET() {
+  const client = new MongoClient(process.env.MONGODB_URI);
+
   try {
+    await client.connect();
+
     const database = client.db("nextjs_database");
     const collection = database.collection("listings");
 
-    const listings = await collection.find({}).toArray();
+    const listings = await collection
+      .find({ status: { $ne: "DELETED" } })
+      .toArray();
 
     return Response.json({
       message: "Listings retrieved successfully",
@@ -21,22 +25,35 @@ export async function GET() {
       },
       { status: 500 }
     );
+  } finally {
+    await client.close();
   }
 }
 
 export async function POST(request) {
+  const client = new MongoClient(process.env.MONGODB_URI);
+
   try {
-    const listing = await request.json();
+    const requestData = await request.json();
+
+    const newListing = {
+      ...requestData,
+      status: "ACTIVE",
+      createdAt: new Date(),
+    };
+
+    await client.connect();
 
     const database = client.db("nextjs_database");
     const collection = database.collection("listings");
 
-    const result = await collection.insertOne(listing);
+    const result = await collection.insertOne(newListing);
 
     return Response.json(
       {
         message: "Listing created successfully",
         insertedId: result.insertedId,
+        data: newListing,
       },
       { status: 201 }
     );
@@ -48,5 +65,7 @@ export async function POST(request) {
       },
       { status: 500 }
     );
+  } finally {
+    await client.close();
   }
 }
