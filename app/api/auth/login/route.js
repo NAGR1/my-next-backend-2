@@ -1,5 +1,7 @@
+import bcrypt from "bcryptjs";
 import { SignJWT } from "jose";
 import { NextResponse } from "next/server";
+import { getDatabase } from "../../../../lib/mongodb";
 
 export async function POST(request) {
   try {
@@ -12,11 +14,24 @@ export async function POST(request) {
       );
     }
 
-    // Demo account for this assignment
-    const validUsername = "student";
-    const validPassword = "123456";
+    const database = await getDatabase();
+    const users = database.collection("users");
 
-    if (username !== validUsername || password !== validPassword) {
+    const user = await users.findOne({ username });
+
+    if (!user) {
+      return NextResponse.json(
+        { message: "Invalid username or password" },
+        { status: 401 }
+      );
+    }
+
+    const passwordMatches = await bcrypt.compare(
+      password,
+      user.password
+    );
+
+    if (!passwordMatches) {
       return NextResponse.json(
         { message: "Invalid username or password" },
         { status: 401 }
@@ -26,8 +41,9 @@ export async function POST(request) {
     const secret = new TextEncoder().encode(process.env.JWT_SECRET);
 
     const token = await new SignJWT({
-      username,
-      role: "student",
+      userId: user._id.toString(),
+      username: user.username,
+      role: user.role,
     })
       .setProtectedHeader({ alg: "HS256" })
       .setIssuedAt()
@@ -37,8 +53,9 @@ export async function POST(request) {
     const response = NextResponse.json({
       message: "Login successful",
       user: {
-        username,
-        role: "student",
+        userId: user._id.toString(),
+        username: user.username,
+        role: user.role,
       },
     });
 
